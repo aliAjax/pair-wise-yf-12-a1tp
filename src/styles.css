@@ -113,6 +113,12 @@ h1 {
   gap: 18px;
 }
 
+.side {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
 .panel, .list-panel {
   background: #fff;
   border: 1px solid #dfe7f1;
@@ -209,6 +215,91 @@ textarea {
   border-radius: 8px;
   padding: 10px;
   margin: 0 0 12px;
+}
+
+.prices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0 0 12px;
+  color: #176b87;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.pending-tag {
+  color: #9a6200;
+  font-weight: 600;
+}
+
+.form-errors {
+  margin: 0;
+  padding: 10px 12px 10px 30px;
+  border-radius: 8px;
+  background: #fdecea;
+  color: #a43525;
+  font-size: 13px;
+  display: grid;
+  gap: 4px;
+}
+
+.form-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #e8f4ef;
+  color: #14724f;
+  font-size: 13px;
+}
+
+.history {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.history-head {
+  margin-bottom: 0;
+}
+
+.history-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #dfe7f1;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fbfcfe;
+}
+
+.history-main {
+  display: grid;
+  gap: 4px;
+  color: #536078;
+  font-size: 13px;
+}
+
+.history-main strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.history-side {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.status.is-pending { background: #fff4e0; color: #9a6200; }
+.status.is-active { background: #e8f4ef; color: #14724f; }
+.status.is-ended { background: #eceff4; color: #69758c; }
+.status.is-withdrawn { background: #fdecea; color: #a43525; }
+
+.locked {
+  color: #69758c;
+  font-size: 12px;
 }
 
 .actions {

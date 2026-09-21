@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
+import { COST_LINE, FUELS, type Fuel, type ScheduleStatus } from "./pricing/rules";
+import { usePricingStore } from "./pricing/store";
 
 type Field = {
   key: string;
@@ -121,7 +123,12 @@ function loadRecords(): RecordItem[] {
 const records = ref<RecordItem[]>(loadRecords());
 const form = reactive<Record<string, string | number>>(createBlank());
 const note = ref("");
-const filter = ref(project.filters[0]);
+
+const pricing = usePricingStore();
+const { version, schedules, filter, commit, withdraw, statusOf, quoteFor, pendingFor } = pricing;
+if (!(project.filters as readonly string[]).includes(filter.value)) {
+  filter.value = project.filters[0];
+}
 
 const filteredRecords = computed(() => {
   if (filter.value.startsWith("全部")) return records.value;
@@ -186,6 +193,59 @@ function remove(id: string) {
   records.value = records.value.filter((record) => record.id !== id);
   persist();
 }
+
+const stationName = (record: RecordItem) => String(record[fields[0].key] || project.entityLabel);
+
+const priceForm = reactive({
+  stationId: "",
+  fuel: FUELS[0] as Fuel,
+  price: "",
+  start: "",
+  end: "",
+  reason: ""
+});
+const priceErrors = ref<string[]>([]);
+const priceNotice = ref("");
+
+function submitPrice() {
+  const station = records.value.find((record) => record.id === priceForm.stationId);
+  priceNotice.value = "";
+  if (!station) {
+    priceErrors.value = ["请选择油站"];
+    return;
+  }
+  const errors = commit({
+    stationId: station.id,
+    stationName: stationName(station),
+    fuel: priceForm.fuel,
+    price: Number(priceForm.price),
+    start: priceForm.start ? `${priceForm.start}T00:00:00` : "",
+    end: priceForm.end ? `${priceForm.end}T23:59:59` : "",
+    reason: priceForm.reason
+  });
+  priceErrors.value = errors;
+  if (errors.length === 0) {
+    priceNotice.value = "调价已登记，进入待生效排期。";
+    priceForm.price = "";
+    priceForm.start = "";
+    priceForm.end = "";
+    priceForm.reason = "";
+  }
+}
+
+const historyEntries = computed(() => {
+  const visible = new Set(filteredRecords.value.map((record) => record.id));
+  return schedules.value.filter((entry) => visible.has(entry.stationId));
+});
+
+function statusClass(status: ScheduleStatus) {
+  return {
+    待生效: "is-pending",
+    已生效: "is-active",
+    已结束: "is-ended",
+    已撤回: "is-withdrawn"
+  }[status];
+}
 </script>
 
 <template>
@@ -210,24 +270,66 @@ function remove(id: string) {
       </section>
 
       <section class="workspace">
-        <form class="panel" @submit.prevent="submit">
-          <h2>{{ project.formTitle }}</h2>
-          <div class="form-grid">
-            <label v-for="field in fields" :key="field.key">
-              {{ field.label }}
-              <select v-if="field.type === 'select'" v-model="form[field.key]" required>
-                <option value="">请选择</option>
-                <option v-for="option in field.options" :key="option">{{ option }}</option>
-              </select>
-              <input v-else v-model="form[field.key]" :type="field.type || 'text'" required />
-            </label>
-            <label>
-              备注
-              <textarea v-model="note" placeholder="填写处理说明或现场备注" />
-            </label>
-            <button type="submit">{{ project.primaryAction }}</button>
-          </div>
-        </form>
+        <div class="side">
+          <form class="panel" @submit.prevent="submit">
+            <h2>{{ project.formTitle }}</h2>
+            <div class="form-grid">
+              <label v-for="field in fields" :key="field.key">
+                {{ field.label }}
+                <select v-if="field.type === 'select'" v-model="form[field.key]" required>
+                  <option value="">请选择</option>
+                  <option v-for="option in field.options" :key="option">{{ option }}</option>
+                </select>
+                <input v-else v-model="form[field.key]" :type="field.type || 'text'" required />
+              </label>
+              <label>
+                备注
+                <textarea v-model="note" placeholder="填写处理说明或现场备注" />
+              </label>
+              <button type="submit">{{ project.primaryAction }}</button>
+            </div>
+          </form>
+
+          <form class="panel" @submit.prevent="submitPrice">
+            <h2>燃油调价登记</h2>
+            <div class="form-grid">
+              <label>
+                油站
+                <select v-model="priceForm.stationId">
+                  <option value="">请选择</option>
+                  <option v-for="record in records" :key="record.id" :value="record.id">{{ stationName(record) }}</option>
+                </select>
+              </label>
+              <label>
+                油品
+                <select v-model="priceForm.fuel">
+                  <option v-for="fuel in FUELS" :key="fuel">{{ fuel }}</option>
+                </select>
+              </label>
+              <label>
+                新价格（元/L，成本线 ¥{{ COST_LINE[priceForm.fuel].toFixed(2) }}）
+                <input v-model="priceForm.price" type="number" step="0.01" min="0" placeholder="例如 7.58" />
+              </label>
+              <label>
+                生效开始
+                <input v-model="priceForm.start" type="date" />
+              </label>
+              <label>
+                生效结束
+                <input v-model="priceForm.end" type="date" />
+              </label>
+              <label>
+                审批依据（涨幅超两成时必填）
+                <textarea v-model="priceForm.reason" placeholder="填写审批文号或调价说明" />
+              </label>
+              <button type="submit">登记调价</button>
+              <ul v-if="priceErrors.length > 0" class="form-errors">
+                <li v-for="error in priceErrors" :key="error">{{ error }}</li>
+              </ul>
+              <p v-if="priceNotice" class="form-notice">{{ priceNotice }}</p>
+            </div>
+          </form>
+        </div>
 
         <section class="list-panel">
           <div class="toolbar">
@@ -247,11 +349,35 @@ function remove(id: string) {
               <div class="details">
                 <span v-for="field in fields" :key="field.key">{{ field.label }}: {{ record[field.key] }}</span>
               </div>
+              <div class="prices">
+                <span v-for="fuel in FUELS" :key="fuel">{{ fuel }} ¥{{ quoteFor(record.id, fuel).toFixed(2) }}</span>
+                <span v-if="pendingFor(record.id) > 0" class="pending-tag">待生效调价 {{ pendingFor(record.id) }} 条</span>
+              </div>
               <p class="note">{{ record.notes }}</p>
               <div class="actions">
                 <button type="button" @click="flow(record)">流转状态</button>
                 <button class="secondary" type="button" @click="navigator.clipboard?.writeText(primaryText(record))">复制摘要</button>
                 <button class="danger" type="button" @click="remove(record.id)">删除</button>
+              </div>
+            </article>
+          </div>
+
+          <div class="history">
+            <div class="toolbar history-head">
+              <h2>价格历史</h2>
+              <span class="tag">排期版本 v{{ version }}</span>
+            </div>
+            <div v-if="historyEntries.length === 0" class="empty">暂无调价记录</div>
+            <article v-for="entry in historyEntries" :key="entry.id" class="history-row">
+              <div class="history-main">
+                <strong>{{ entry.stationName }} · {{ entry.fuel }}</strong>
+                <span>¥{{ entry.price.toFixed(2) }} ｜ {{ entry.start.slice(0, 10) }} ~ {{ entry.end.slice(0, 10) }}</span>
+                <span v-if="entry.reason" class="history-reason">审批依据：{{ entry.reason }}</span>
+              </div>
+              <div class="history-side">
+                <span class="status" :class="statusClass(statusOf(entry))">{{ statusOf(entry) }}</span>
+                <button v-if="statusOf(entry) === '待生效'" class="danger" type="button" @click="withdraw(entry.id)">撤回</button>
+                <span v-else-if="statusOf(entry) === '已生效'" class="locked">已锁定</span>
               </div>
             </article>
           </div>
